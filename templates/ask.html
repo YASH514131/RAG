@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ask Question</title>
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 800px;
+            margin: 20px auto;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            position: relative; /* Needed for absolute positioning of loader */
+        }
+        .chat-container {
+            max-width: 600px;
+            margin: 20px auto;
+            position:relative; /* Needed for positioning of loader */
+            padding: 20px;
+            border-radius: 8px;
+            display: flex;
+            box-shadow: 0 4px 8px rgba(255, 255, 255, 0.1);
+            margin-bottom: 20px;
+            flex-direction: column; /* Added for proper positioning of the loader */
+        }
+        .message {
+            padding: 10px 15px;
+            margin: 5px 0;
+            border-radius: 20px;
+            max-width: 80%;
+            word-wrap: break-word;
+        }
+        .user {
+            background-color: #dcf8c6;
+            align-self: flex-end; /* Align user's message to the right */
+        }
+        .form-container {
+            display: flex;
+            margin-top: 20px;
+            align-items: center; /* Align input and button vertically */
+        }
+        .form-container input {
+            flex: 1;
+            border-top-left-radius: 20px;
+            border-bottom-left-radius: 20px;
+            margin-right: 5px; /* Add spacing between input and button */
+        }
+        .form-container button {
+            border-top-right-radius: 20px;
+            border-bottom-right-radius: 20px;
+        }
+        .response {
+            background-color: #f1f0f0;
+            align-self: flex-start; /* Align AI's response to the left */
+        }
+        .loader {
+    position: absolute;
+    top: 75%; /* Adjusted percentage from the top */
+    left: 50%;
+    transform: translate(-50%, -50%);
+    display: none; /* Initially hidden */
+     }
+
+        .dot {
+            display: inline-block;
+            width: 50px;
+            height: 50px;
+            background-color: #77a8d2;
+            border-radius: 50%;
+            margin-right: 5px;
+            animation: wave 1.5s infinite ease-in-out;
+        }
+        .dot:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+        .dot:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+        @keyframes wave {
+            0%, 60%, 100% {
+                transform: translateY(0);
+            }
+            30% {
+                transform: translateY(-5px);
+            }
+        }
+    </style>
+</head>
+<body>
+
+   <div class="container">
+        <h1 class="text-center my-4">Ask a Question</h1>
+        <div class="chat-container" id="chat-container"></div>
+        <form id="question-form" class="form-container">
+            <input type="text" id="question-input" class="form-control" placeholder="Type your question here">
+            <button type="submit" class="btn btn-primary" id="submit-btn">Ask</button>
+            <div class="loader" id="loader">
+                <div class="dot"></div>
+                <div class="dot"></div>
+                <div class="dot"></div>
+            </div>
+        </form>
+    </div>
+
+	<script>
+    const form = document.getElementById('question-form');
+    const input = document.getElementById('question-input');
+    const chatContainer = document.getElementById('chat-container');
+    const loader = document.getElementById('loader'); // Get the loader element
+    const submitBtn = document.getElementById('submit-btn');
+
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const question = input.value;
+        if (question.trim() === "") return;
+
+        // Display loader while waiting for AI response
+        loader.style.display = 'block';
+        submitBtn.disabled = true; // Disable the submit button while processing
+
+        // Display user's question
+        const userMessage = document.createElement('div');
+        userMessage.className = 'message user';
+        userMessage.textContent = question;
+        chatContainer.appendChild(userMessage);
+        
+        // Scroll to the bottom of the chat
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+
+        // Clear input field
+        input.value = "";
+
+        // Send question to server
+        const response = await fetch('/ask', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ question })
+        });
+
+        // Read response stream word by word and append each word to chat container
+        const reader = response.body.getReader();
+        let decoder = new TextDecoder();
+        let partialText = '';
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            
+            partialText += decoder.decode(value, { stream: true });
+            const words = partialText.split(' ');
+            const lastMessage = chatContainer.lastElementChild;
+            if (lastMessage && lastMessage.classList.contains('message') && lastMessage.classList.contains('response')) {
+                // If last message is a response, append to it
+                lastMessage.textContent += ' ' + words.join(' ');
+            } else {
+                // Otherwise, create new message
+                const aiMessage = document.createElement('div');
+                aiMessage.className = 'message response';
+                aiMessage.textContent = words.join(' ');
+                chatContainer.appendChild(aiMessage);
+            }
+
+            // Scroll to the bottom of the chat
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+            await new Promise(resolve => setTimeout(resolve, 100)); // Delay between appending words
+            partialText = '';
+        }
+
+        // Hide loader after receiving response
+        loader.style.display = 'none';
+        submitBtn.disabled = false; // Re-enable the submit button
+    });
+</script>   
+</body>
+</html>
